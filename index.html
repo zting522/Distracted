@@ -1,0 +1,694 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#0A0E13">
+<title>駕駛分心次要作業測試</title>
+<style>
+  :root{
+    --bg: #0A0E13;
+    --panel: #121821;
+    --panel-2: #1A2330;
+    --line: #26313F;
+    --text: #E8EDF3;
+    --text-dim: #8CA0B3;
+    --amber: #FFB020;
+    --amber-dim: #7A5A1E;
+    --green: #3DDC84;
+    --red: #FF5566;
+    --mono: 'IBM Plex Mono', 'Courier New', ui-monospace, monospace;
+    --sans: 'Noto Sans TC', 'PingFang TC', 'Microsoft JhengHei', -apple-system, sans-serif;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color: transparent;}
+  html,body{
+    margin:0; padding:0; height:100%;
+    background:var(--bg); color:var(--text);
+    font-family:var(--sans);
+    overflow:hidden;
+  }
+  .screen{
+    position:fixed; inset:0;
+    display:none;
+    flex-direction:column;
+  }
+  .screen.active{display:flex;}
+
+  /* ---------- 頂部狀態列 ---------- */
+  .topbar{
+    display:flex; align-items:center; justify-content:space-between;
+    padding:10px 18px;
+    background:var(--panel);
+    border-bottom:1px solid var(--line);
+    font-family:var(--mono);
+    font-size:13px;
+    color:var(--text-dim);
+    flex-shrink:0;
+  }
+  .topbar .stat{margin-right:22px; white-space:nowrap;}
+  .topbar .stat b{color:var(--text); font-weight:600;}
+  #stat-elapsed.low-time{color:var(--red);}
+  .radar-tick{
+    width:10px; height:10px; border-radius:50%;
+    background:var(--amber);
+    display:inline-block; margin-right:8px;
+    animation: pulse 1.6s ease-in-out infinite;
+    flex-shrink:0;
+  }
+  @keyframes pulse{
+    0%,100%{opacity:.35; transform:scale(1);}
+    50%{opacity:1; transform:scale(1.25);}
+  }
+  .topbar-left{display:flex; align-items:center;}
+  .topbar-right{display:flex; align-items:center;}
+  .btn-mini{
+    background:transparent; border:1px solid var(--line); color:var(--text-dim);
+    font-family:var(--mono); font-size:12px; padding:6px 12px; border-radius:6px;
+    cursor:pointer; margin-left:8px;
+  }
+  .btn-mini:hover{border-color:var(--amber); color:var(--amber);}
+
+  /* ---------- 設定畫面 ---------- */
+  #screen-setup{align-items:center; justify-content:center; padding:24px;}
+  .setup-card{
+    width:100%; max-width:520px;
+    background:var(--panel);
+    border:1px solid var(--line);
+    border-radius:14px;
+    padding:36px 32px;
+  }
+  .setup-card h1{
+    font-size:22px; margin:0 0 6px 0; letter-spacing:.5px;
+  }
+  .setup-card .sub{
+    color:var(--text-dim); font-size:13px; margin-bottom:28px; font-family:var(--mono);
+  }
+  .field{margin-bottom:22px;}
+  .field label{
+    display:block; font-size:13px; color:var(--text-dim); margin-bottom:8px;
+    font-family:var(--mono); letter-spacing:.5px;
+  }
+  .field input[type=text]{
+    width:100%; padding:12px 14px; font-size:16px;
+    background:var(--panel-2); border:1px solid var(--line); border-radius:8px;
+    color:var(--text); font-family:var(--mono);
+  }
+  .field input[type=text]:focus{outline:none; border-color:var(--amber);}
+  .check-row{display:flex; gap:10px;}
+  .check-opt{
+    flex:1; display:flex; align-items:center; gap:10px;
+    padding:12px 14px; background:var(--panel-2); border:1px solid var(--line);
+    border-radius:8px; cursor:pointer; font-size:14px;
+  }
+  .check-opt.on{border-color:var(--amber); background:rgba(255,176,32,.08);}
+  .check-opt input{width:16px; height:16px; accent-color:var(--amber);}
+  .start-btn{
+    width:100%; padding:16px; margin-top:8px;
+    background:var(--amber); color:#1A1204; border:none; border-radius:10px;
+    font-size:17px; font-weight:700; letter-spacing:1px; cursor:pointer;
+    font-family:var(--sans);
+  }
+  .start-btn:disabled{background:var(--amber-dim); color:#5c4c2c; cursor:not-allowed;}
+  .start-btn:not(:disabled):active{transform:scale(.98);}
+  .hint{font-size:12px; color:var(--text-dim); margin-top:14px; line-height:1.6;}
+
+  /* ---------- 測驗畫面 ---------- */
+  #screen-test{flex:1;}
+  .test-body{
+    flex:1; display:flex; flex-direction:column;
+    align-items:center; justify-content:center;
+    padding:24px; gap:28px;
+  }
+  .q-type-tag{
+    font-family:var(--mono); font-size:12px; color:var(--amber);
+    letter-spacing:2px; text-transform:uppercase;
+  }
+  .q-text{
+    font-size:clamp(26px, 5vw, 42px);
+    font-weight:700; text-align:center; line-height:1.4;
+    max-width:900px;
+    min-height:1.4em;
+  }
+  .answers{
+    width:100%; max-width:760px;
+    display:grid; grid-template-columns:1fr 1fr; gap:16px;
+  }
+  .ans-btn{
+    padding:26px 16px; font-size:clamp(18px,2.6vw,24px); font-weight:600;
+    background:var(--panel); border:2px solid var(--line); border-radius:14px;
+    color:var(--text); cursor:pointer; min-height:96px;
+    font-family:var(--sans);
+    transition:transform .08s ease, border-color .15s ease, background .15s ease;
+  }
+  .ans-btn:active{transform:scale(.97);}
+  .ans-btn.correct{border-color:var(--green); background:rgba(61,220,132,.14); color:var(--green);}
+  .ans-btn.wrong{border-color:var(--red); background:rgba(255,85,102,.14); color:var(--red);}
+  .ans-btn.dim{opacity:.35;}
+  .ans-btn:disabled{cursor:default;}
+
+  .paused-overlay{
+    position:absolute; inset:0; background:rgba(10,14,19,.92);
+    display:none; align-items:center; justify-content:center; flex-direction:column; gap:18px;
+    z-index:5;
+  }
+  .paused-overlay.active{display:flex;}
+  .paused-overlay .big{font-size:24px; font-weight:700; letter-spacing:2px; color:var(--amber);}
+  .resume-btn{
+    padding:14px 40px; background:var(--amber); color:#1A1204; border:none; border-radius:10px;
+    font-size:16px; font-weight:700; cursor:pointer;
+  }
+
+  /* ---------- 結束總結畫面 ---------- */
+  #screen-summary{align-items:center; justify-content:center; padding:24px;}
+  .summary-card{
+    width:100%; max-width:560px; background:var(--panel); border:1px solid var(--line);
+    border-radius:14px; padding:36px 32px;
+  }
+  .summary-card h1{font-size:20px; margin:0 0 24px 0;}
+  .metrics{display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-bottom:28px;}
+  .metric{
+    background:var(--panel-2); border:1px solid var(--line); border-radius:10px; padding:16px;
+  }
+  .metric .v{font-family:var(--mono); font-size:26px; font-weight:700; color:var(--amber);}
+  .metric .l{font-size:12px; color:var(--text-dim); margin-top:4px;}
+  .action-row{display:flex; gap:12px;}
+  .action-row button{
+    flex:1; padding:14px; border-radius:10px; font-size:14px; font-weight:700; cursor:pointer;
+    font-family:var(--sans); border:1px solid var(--line);
+  }
+  .btn-export{background:var(--amber); color:#1A1204; border:none;}
+  .btn-restart{background:transparent; color:var(--text-dim);}
+  .btn-restart:hover{color:var(--text); border-color:var(--text-dim);}
+</style>
+</head>
+<body>
+
+<!-- ============ 畫面一：設定 ============ -->
+<div id="screen-setup" class="screen active">
+  <div class="setup-card">
+    <h1>駕駛分心次要作業測試</h1>
+    <div class="sub">SECONDARY TASK · mmWave RADAR SYNC</div>
+
+    <div class="field">
+      <label>受試者編號 / SUBJECT ID</label>
+      <input type="text" id="input-subject" placeholder="例如：P01" autocomplete="off">
+    </div>
+
+    <div class="field">
+      <label>題型（可複選）</label>
+      <div class="check-row">
+        <label class="check-opt on" id="opt-knowledge">
+          <input type="checkbox" checked data-type="knowledge">
+          知識／常識題
+        </label>
+        <label class="check-opt on" id="opt-math">
+          <input type="checkbox" checked data-type="math">
+          簡單心算題
+        </label>
+      </div>
+    </div>
+
+    <button class="start-btn" id="btn-start">開始測驗</button>
+    <div class="hint">
+      按下開始後會記錄一個「測驗起始時間戳記」，方便之後與毫米波雷達資料對時比對。<br>
+      每一題作答後會自動出下一題，無需手動切換。<br>
+      測驗總時長為 3 分鐘，時間到會自動結束並顯示結果。
+    </div>
+  </div>
+</div>
+
+<!-- ============ 畫面二：測驗 ============ -->
+<div id="screen-test" class="screen" style="position:relative;">
+  <div class="topbar">
+    <div class="topbar-left">
+      <span class="radar-tick"></span>
+      <span class="stat">受試者 <b id="stat-subject">-</b></span>
+      <span class="stat">已作答 <b id="stat-count">0</b></span>
+      <span class="stat">正確率 <b id="stat-acc">-</b></span>
+      <span class="stat">平均反應 <b id="stat-rt">-</b></span>
+    </div>
+    <div class="topbar-right">
+      <span class="stat">剩餘時間 <b id="stat-elapsed">03:00</b></span>
+      <button class="btn-mini" id="btn-pause">暫停</button>
+      <button class="btn-mini" id="btn-end">結束測驗</button>
+    </div>
+  </div>
+
+  <div class="test-body">
+    <div class="q-type-tag" id="q-type-tag">TYPE</div>
+    <div class="q-text" id="q-text">載入題目中…</div>
+    <div class="answers" id="answers"></div>
+  </div>
+
+  <div class="paused-overlay" id="paused-overlay">
+    <div class="big">測驗暫停</div>
+    <button class="resume-btn" id="btn-resume">繼續測驗</button>
+  </div>
+</div>
+
+<!-- ============ 畫面三：結束總結 ============ -->
+<div id="screen-summary" class="screen">
+  <div class="summary-card">
+    <h1>測驗結束　RESULTS</h1>
+    <div class="metrics">
+      <div class="metric"><div class="v" id="sum-count">0</div><div class="l">總作答題數</div></div>
+      <div class="metric"><div class="v" id="sum-acc">0%</div><div class="l">正確率</div></div>
+      <div class="metric"><div class="v" id="sum-rt">0 ms</div><div class="l">平均反應時間</div></div>
+      <div class="metric"><div class="v" id="sum-dur">0:00</div><div class="l">測驗總時長</div></div>
+    </div>
+    <div class="action-row">
+      <button class="btn-export" id="btn-export">匯出 CSV</button>
+      <button class="btn-restart" id="btn-restart">重新開始</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  /* ---------------- 題庫：知識／常識（進階難度） ---------------- */
+  const KNOWLEDGE_BANK = [
+    {q:"台灣最長的河流是？", opts:["淡水河","大甲溪","高屏溪","濁水溪"], a:3},
+    {q:"人體中負責分泌胰島素的器官是？", opts:["肝臟","胰臟","脾臟","腎臟"], a:1},
+    {q:"下列哪個是世界上最大的沙漠？", opts:["撒哈拉沙漠","戈壁沙漠","南極洲","喀拉哈里沙漠"], a:2},
+    {q:"元素週期表中，原子序1號的元素是？", opts:["氦","氫","碳","氧"], a:1},
+    {q:"下列哪個行星距離太陽最近？", opts:["金星","地球","水星","火星"], a:2},
+    {q:"「一甲子」在傳統曆法中代表幾年？", opts:["10年","12年","60年","100年"], a:2},
+    {q:"下列哪一項是質數？", opts:["21","33","41","51"], a:2},
+    {q:"哪一種動物的懷孕期最長？", opts:["大象","長頸鹿","藍鯨","河馬"], a:2},
+    {q:"光在真空中的速度大約是每秒多少公里？", opts:["3百公里","3千公里","30萬公里","300萬公里"], a:2},
+    {q:"下列哪個是台灣的邦交國（曾/現任一即可，選最普遍知名者）？", opts:["日本","帛琉","美國","韓國"], a:1},
+    {q:"人體正常的心跳速率（成人靜止時）大約每分鐘幾下？", opts:["20-40下","60-100下","150-180下","200下以上"], a:1},
+    {q:"下列哪一項屬於溫室氣體？", opts:["氮氣","二氧化碳","氧氣","氬氣"], a:1},
+    {q:"「二十四節氣」中，哪一個節氣通常代表白天最短、夜晚最長？", opts:["夏至","冬至","春分","秋分"], a:1},
+    {q:"下列哪一種是哺乳類動物？", opts:["鯊魚","海豚","章魚","海龜"], a:1},
+    {q:"世界上使用人數最多的官方語言（母語人數）是？", opts:["英語","西班牙語","華語（漢語）","印地語"], a:2},
+    {q:"下列哪個城市不是台灣的直轄市？", opts:["台南","新竹","台中","桃園"], a:1},
+    {q:"人類的DNA主要儲存在細胞的哪個構造中？", opts:["粒線體","細胞核","細胞膜","高基氏體"], a:1},
+    {q:"下列哪一個是質量單位而非重量單位？", opts:["牛頓","公斤","磅力","達因"], a:1},
+    {q:"「梅雨季」在台灣通常發生在哪個月份前後？", opts:["1-2月","5-6月","8-9月","11-12月"], a:1},
+    {q:"下列哪一項是酸性物質？", opts:["肥皂水","檸檬汁","小蘇打水","漂白水"], a:1},
+    {q:"世界第一高峰聖母峰位於哪兩國交界？", opts:["中國與印度","尼泊爾與中國","印度與尼泊爾","不丹與中國"], a:1},
+    {q:"下列哪一種血型被稱為「萬能捐血者」？", opts:["A型","B型","AB型","O型"], a:3},
+    {q:"「工業革命」最早起源於哪個國家？", opts:["法國","德國","英國","美國"], a:2},
+    {q:"下列哪一項是可再生能源？", opts:["煤炭","天然氣","太陽能","石油"], a:2},
+    {q:"人體共有幾對染色體（一般情況）？", opts:["21對","22對","23對","24對"], a:2},
+    {q:"下列哪個是二進位制中「1010」轉換成十進位的數值？", opts:["8","9","10","12"], a:2},
+    {q:"「聖嬰現象」主要與哪個大洋的海溫異常有關？", opts:["大西洋","印度洋","太平洋","北極海"], a:2},
+    {q:"下列哪一項不是台灣高速公路，而是快速道路的常見編號開頭？", opts:["國道1號","國道3號","台61線","國道5號"], a:2},
+    {q:"下列哪一項是台灣最大的湖泊？", opts:["澄清湖","日月潭","鯉魚潭","曾文水庫"], a:1},
+    {q:"人體血液中負責攜帶氧氣的成分是？", opts:["白血球","血小板","紅血球","血漿"], a:2},
+    {q:"下列哪個國家的國土面積最大？", opts:["加拿大","中國","美國","俄羅斯"], a:3},
+    {q:"「文藝復興」運動最早興起於哪個地區？", opts:["法國","義大利","英國","德國"], a:1},
+    {q:"下列哪一項屬於非金屬元素？", opts:["鐵","鋁","氧","銅"], a:2},
+    {q:"人類的乳牙一般共有幾顆？", opts:["16顆","20顆","24顆","28顆"], a:1},
+    {q:"下列哪個是質數的組合？", opts:["2, 4, 6","3, 5, 7","9, 15, 21","4, 8, 12"], a:1},
+    {q:"「赤道」將地球分為哪兩個半球？", opts:["東半球與西半球","南半球與北半球","陸地與海洋","熱帶與寒帶"], a:1},
+    {q:"下列哪一種是爬蟲類動物？", opts:["青蛙","鱷魚","蠑螈","水母"], a:1},
+    {q:"台灣位於哪個板塊交界處，因此地震頻繁？", opts:["歐亞板塊與太平洋板塊","歐亞板塊與菲律賓海板塊","印度板塊與歐亞板塊","太平洋板塊與美洲板塊"], a:1},
+    {q:"下列哪一項單位屬於溫度單位？", opts:["帕斯卡","焦耳","克","攝氏度"], a:3},
+    {q:"世界上最深的海溝是？", opts:["馬里亞納海溝","波多黎各海溝","日本海溝","爪哇海溝"], a:0},
+    {q:"下列哪一項是「文言文」對應的概念？", opts:["白話文","甲骨文","注音文","火星文"], a:0},
+    {q:"人體最堅硬的組織是？", opts:["骨骼","牙齒琺瑯質","指甲","軟骨"], a:1},
+    {q:"下列哪一個是黃金的化學符號？", opts:["Ag","Au","Fe","Gd"], a:1},
+    {q:"「聯合國」總部設立於哪個城市？", opts:["日內瓦","紐約","巴黎","倫敦"], a:1},
+    {q:"下列哪一項是奇數？", opts:["128","243","356","470"], a:1},
+    {q:"台灣的國花是？", opts:["蘭花","梅花","菊花","荷花"], a:1},
+    {q:"下列哪一種星球屬於「類地行星」？", opts:["木星","土星","火星","天王星"], a:2},
+    {q:"人類胚胎在母體內發育大約需要多少週？", opts:["約20週","約30週","約40週","約50週"], a:2},
+    {q:"下列哪一項是酸鹼值(pH)中性的數值？", opts:["3","7","10","14"], a:1},
+    {q:"「絲路」古代主要連結哪兩個文明區域？", opts:["歐洲與非洲","中國與歐洲","印度與美洲","中東與大洋洲"], a:1},
+    {q:"下列哪一種樂器屬於弦樂器？", opts:["長笛","小提琴","銅鈸","定音鼓"], a:1},
+    {q:"地球自轉一圈大約需要多少時間？", opts:["12小時","24小時","365天","一週"], a:1},
+    {q:"下列哪一項是二次方程式 x²=9 的其中一解？", opts:["-3","4","5","6"], a:0},
+    {q:"「聲音」在下列哪一種介質中傳播速度最快？", opts:["空氣","水","真空","鋼鐵"], a:3},
+    {q:"下列哪一個國家使用歐元作為官方貨幣？", opts:["英國","瑞士","德國","挪威"], a:2},
+    {q:"人類的正常視力，兩眼視野角度大約可達多少度？", opts:["約90度","約120度","約180度","約270度"], a:2},
+    {q:"下列哪一項是質量最重的內臟器官？", opts:["心臟","肺臟","肝臟","腎臟"], a:2},
+    {q:"「摩斯密碼」主要使用哪兩種符號組成？", opts:["長音與短音","數字0與1","紅與藍","高音與低音"], a:0},
+    {q:"下列哪一個是台灣的世界遺產潛力點之一？", opts:["太魯閣國家公園","東京鐵塔","萬里長城","吳哥窟"], a:0},
+    {q:"下列哪一項數列的下一個數字是16？（2,4,8,?)", opts:["10","12","14","16"], a:3},
+    {q:"「文藝復興三傑」不包含下列哪一位？", opts:["達文西","米開朗基羅","拉斐爾","牛頓"], a:3},
+    {q:"下列哪一項氣體在空氣中含量最多？", opts:["氧氣","二氧化碳","氮氣","氬氣"], a:2},
+    {q:"人體的脊椎骨大約有幾節？", opts:["26節","33節","40節","50節"], a:1},
+    {q:"下列哪一項是質數26的因數？", opts:["3","5","7","13"], a:3},
+    {q:"「印刷術」在中國古代最早的重要發明形式是？", opts:["活字印刷","雕版印刷","石版印刷","數位印刷"], a:1},
+    {q:"下列哪一種天氣現象與「低氣壓」較有關？", opts:["晴朗無雲","颱風","乾燥少雨","穩定高溫"], a:1},
+    {q:"人類的耳朵除了聽覺外，還負責哪一項重要功能？", opts:["視覺對焦","平衡感","嗅覺","味覺"], a:1},
+    {q:"下列哪一項是二進位「1100」轉換成十進位的數值？", opts:["8","10","12","14"], a:2},
+    {q:"「文藝復興」之後，歐洲接續進入的時代思潮通常被稱為？", opts:["啟蒙運動","工業革命","中世紀","黑暗時代"], a:0},
+    {q:"下列哪一項屬於「哺乳類」但生活在海洋中？", opts:["鯊魚","鮪魚","海豹","水母"], a:2},
+    {q:"地球上淡水資源占全部水資源的比例大約是？", opts:["約2.5%","約10%","約25%","約50%"], a:0},
+    {q:"下列哪一項是三角形內角和的度數？", opts:["90度","180度","270度","360度"], a:1},
+    {q:"「甲骨文」主要是古代哪個朝代用來記錄占卜的文字？", opts:["夏朝","商朝","周朝","秦朝"], a:1},
+    {q:"下列哪一項是電流的單位？", opts:["伏特","歐姆","安培","瓦特"], a:2},
+    {q:"台灣海峽平均寬度大約是多少公里？", opts:["約50公里","約130公里","約300公里","約500公里"], a:1},
+    {q:"下列哪一項是「質數」？", opts:["49","51","57","59"], a:3},
+    {q:"人類大腦左右半球中，通常語言功能較集中於哪一側（多數右撇子）？", opts:["左半球","右半球","兩側平均","小腦"], a:0}
+  ];
+
+  /* ---------------- 題目產生器：心算 ---------------- */
+  function randInt(min, max){ return Math.floor(Math.random() * (max - min + 1)) + min; }
+
+  function generateMathQuestion(){
+    const ops = ['+', '-', '×', '÷'];
+    const op = ops[randInt(0, ops.length - 1)];
+    let a, b, correct, text;
+    if(op === '+'){
+      a = randInt(23, 96); b = randInt(23, 96);
+      correct = a + b;
+      text = `${a} + ${b} = ?`;
+    } else if(op === '-'){
+      a = randInt(40, 99); b = randInt(15, a - 5);
+      correct = a - b;
+      text = `${a} - ${b} = ?`;
+    } else if(op === '×'){
+      a = randInt(11, 19); b = randInt(3, 12);
+      correct = a * b;
+      text = `${a} × ${b} = ?`;
+    } else {
+      // 除法：先決定商與除數，反推被除數，確保整除
+      b = randInt(3, 12);
+      correct = randInt(4, 15);
+      a = b * correct;
+      text = `${a} ÷ ${b} = ?`;
+    }
+
+    const distractorSet = new Set([correct]);
+    if(op === '÷'){
+      // 除法的干擾選項也需為合理的整數
+      while(distractorSet.size < 4){
+        const delta = randInt(1, 4);
+        const sign = Math.random() < 0.5 ? -1 : 1;
+        let candidate = correct + sign * delta;
+        if(candidate <= 0) candidate = correct + delta;
+        distractorSet.add(candidate);
+      }
+      const opts = shuffle(Array.from(distractorSet));
+      return { text, opts, correctIndex: opts.indexOf(correct) };
+    }
+    while(distractorSet.size < 4){
+      const delta = randInt(1, Math.max(3, Math.round(correct * 0.25) + 3));
+      const sign = Math.random() < 0.5 ? -1 : 1;
+      let candidate = correct + sign * delta;
+      if(candidate < 0) candidate = correct + delta;
+      distractorSet.add(candidate);
+    }
+    const opts = shuffle(Array.from(distractorSet));
+    return { text, opts, correctIndex: opts.indexOf(correct) };
+  }
+
+  function shuffle(arr){
+    const a = arr.slice();
+    for(let i = a.length - 1; i > 0; i--){
+      const j = randInt(0, i);
+      [a[i], a[j]] = [a[j], a[i]];
+    }
+    return a;
+  }
+
+  /* ---------------- 知識題出題順序（洗牌不重複，用完重洗） ---------------- */
+  let knowledgeQueue = [];
+  function nextKnowledgeQuestion(){
+    if(knowledgeQueue.length === 0){
+      knowledgeQueue = shuffle(KNOWLEDGE_BANK.map((_, i) => i));
+    }
+    const idx = knowledgeQueue.pop();
+    const item = KNOWLEDGE_BANK[idx];
+    const opts = shuffle(item.opts.map((text, i) => ({text, correct: i === item.a})));
+    return {
+      text: item.q,
+      opts: opts.map(o => o.text),
+      correctIndex: opts.findIndex(o => o.correct)
+    };
+  }
+
+  /* ---------------- 狀態 ---------------- */
+  const state = {
+    subjectId: "",
+    enabledTypes: [],
+    trials: [],
+    sessionStartMs: 0,
+    sessionStartISO: "",
+    currentQuestion: null,
+    currentOnsetMs: 0,
+    paused: false,
+    ended: false,
+    timerHandle: null,
+    advanceTimeout: null
+  };
+
+  /* ---------------- DOM refs ---------------- */
+  const $ = (id) => document.getElementById(id);
+  const screens = {
+    setup: $("screen-setup"),
+    test: $("screen-test"),
+    summary: $("screen-summary")
+  };
+
+  function showScreen(name){
+    Object.values(screens).forEach(s => s.classList.remove("active"));
+    screens[name].classList.add("active");
+  }
+
+  /* ---------------- 設定畫面互動 ---------------- */
+  document.querySelectorAll(".check-opt input").forEach(cb => {
+    cb.addEventListener("change", () => {
+      cb.closest(".check-opt").classList.toggle("on", cb.checked);
+      validateStart();
+    });
+  });
+
+  function validateStart(){
+    const anyChecked = Array.from(document.querySelectorAll(".check-opt input")).some(cb => cb.checked);
+    $("btn-start").disabled = !anyChecked;
+  }
+  validateStart();
+
+  $("btn-start").addEventListener("click", () => {
+    const subject = $("input-subject").value.trim() || "ANON";
+    const types = Array.from(document.querySelectorAll(".check-opt input"))
+      .filter(cb => cb.checked)
+      .map(cb => cb.dataset.type);
+
+    state.subjectId = subject;
+    state.enabledTypes = types;
+    state.trials = [];
+    state.paused = false;
+    state.ended = false;
+
+    const now = new Date();
+    state.sessionStartMs = now.getTime();
+    state.sessionStartISO = now.toISOString();
+
+    $("stat-subject").textContent = subject;
+    updateStatsDisplay();
+    startTimer();
+    showScreen("test");
+    renderNextQuestion();
+  });
+
+  /* ---------------- 計時器（3分鐘倒數，時間到自動結束） ---------------- */
+  const TEST_DURATION_MS = 3 * 60 * 1000;
+
+  function startTimer(){
+    clearInterval(state.timerHandle);
+    state.timerHandle = setInterval(() => {
+      if(state.paused || state.ended) return;
+      const elapsed = Date.now() - state.sessionStartMs;
+      const remaining = TEST_DURATION_MS - elapsed;
+
+      if(remaining <= 0){
+        $("stat-elapsed").textContent = "00:00";
+        endTest();
+        return;
+      }
+
+      $("stat-elapsed").textContent = formatDuration(remaining);
+      $("stat-elapsed").classList.toggle("low-time", remaining <= 30000);
+    }, 250);
+  }
+
+  function formatDuration(ms){
+    const totalSec = Math.floor(ms / 1000);
+    const m = Math.floor(totalSec / 60);
+    const s = totalSec % 60;
+    return `${String(m).padStart(2,"0")}:${String(s).padStart(2,"0")}`;
+  }
+
+  /* ---------------- 出題 ---------------- */
+  function renderNextQuestion(){
+    if(state.paused || state.ended) return;
+
+    const type = state.enabledTypes[randInt(0, state.enabledTypes.length - 1)];
+    let q;
+    if(type === "math"){
+      const g = generateMathQuestion();
+      q = { type: "math", text: g.text, opts: g.opts, correctIndex: g.correctIndex };
+    } else {
+      const g = nextKnowledgeQuestion();
+      q = { type: "knowledge", text: g.text, opts: g.opts, correctIndex: g.correctIndex };
+    }
+
+    state.currentQuestion = q;
+    state.currentOnsetMs = Date.now();
+
+    $("q-type-tag").textContent = q.type === "math" ? "心算" : "知識／常識";
+    $("q-text").textContent = q.text;
+
+    const answersEl = $("answers");
+    answersEl.innerHTML = "";
+    q.opts.forEach((optText, i) => {
+      const btn = document.createElement("button");
+      btn.className = "ans-btn";
+      btn.textContent = optText;
+      btn.addEventListener("click", () => handleAnswer(i, btn));
+      answersEl.appendChild(btn);
+    });
+  }
+
+  /* ---------------- 作答處理 ---------------- */
+  function handleAnswer(selectedIndex, btnEl){
+    if(state.paused || state.ended) return;
+    const responseMs = Date.now();
+    const q = state.currentQuestion;
+    const isCorrect = selectedIndex === q.correctIndex;
+    const rt = responseMs - state.currentOnsetMs;
+
+    // 視覺回饋 + 鎖定按鈕
+    const allBtns = Array.from($("answers").children);
+    allBtns.forEach((b, i) => {
+      b.disabled = true;
+      if(i === q.correctIndex) b.classList.add("correct");
+      else if(i === selectedIndex) b.classList.add("wrong");
+      else b.classList.add("dim");
+    });
+
+    // 記錄資料
+    state.trials.push({
+      trial_index: state.trials.length + 1,
+      question_type: q.type,
+      question_text: q.text,
+      options: q.opts.join(" | "),
+      correct_answer: q.opts[q.correctIndex],
+      selected_answer: q.opts[selectedIndex],
+      is_correct: isCorrect ? 1 : 0,
+      onset_iso: new Date(state.currentOnsetMs).toISOString(),
+      onset_epoch_ms: state.currentOnsetMs,
+      response_iso: new Date(responseMs).toISOString(),
+      response_epoch_ms: responseMs,
+      reaction_time_ms: rt,
+      session_elapsed_ms: responseMs - state.sessionStartMs
+    });
+
+    updateStatsDisplay();
+
+    state.advanceTimeout = setTimeout(() => {
+      if(!state.ended && !state.paused) renderNextQuestion();
+    }, 550);
+  }
+
+  function updateStatsDisplay(){
+    const n = state.trials.length;
+    const correct = state.trials.filter(t => t.is_correct).length;
+    const avgRt = n ? Math.round(state.trials.reduce((s,t) => s + t.reaction_time_ms, 0) / n) : 0;
+
+    $("stat-count").textContent = n;
+    $("stat-acc").textContent = n ? `${Math.round(correct / n * 100)}%` : "-";
+    $("stat-rt").textContent = n ? `${avgRt} ms` : "-";
+  }
+
+  /* ---------------- 暫停 / 繼續 ---------------- */
+  $("btn-pause").addEventListener("click", () => {
+    state.paused = true;
+    $("paused-overlay").classList.add("active");
+    clearTimeout(state.advanceTimeout);
+  });
+
+  $("btn-resume").addEventListener("click", () => {
+    state.paused = false;
+    $("paused-overlay").classList.remove("active");
+    renderNextQuestion();
+  });
+
+  /* ---------------- 結束測驗 ---------------- */
+  $("btn-end").addEventListener("click", () => {
+    endTest();
+  });
+
+  function endTest(){
+    state.ended = true;
+    clearTimeout(state.advanceTimeout);
+    clearInterval(state.timerHandle);
+
+    const n = state.trials.length;
+    const correct = state.trials.filter(t => t.is_correct).length;
+    const avgRt = n ? Math.round(state.trials.reduce((s,t) => s + t.reaction_time_ms, 0) / n) : 0;
+    const totalDur = state.trials.length ? state.trials[state.trials.length - 1].session_elapsed_ms : (Date.now() - state.sessionStartMs);
+
+    $("sum-count").textContent = n;
+    $("sum-acc").textContent = n ? `${Math.round(correct / n * 100)}%` : "0%";
+    $("sum-rt").textContent = `${avgRt} ms`;
+    $("sum-dur").textContent = formatDuration(totalDur);
+
+    showScreen("summary");
+  }
+
+  /* ---------------- CSV 匯出 ---------------- */
+  $("btn-export").addEventListener("click", () => {
+    const headers = [
+      "subject_id","session_start_iso","session_start_epoch_ms",
+      "trial_index","question_type","question_text","options",
+      "correct_answer","selected_answer","is_correct",
+      "onset_iso","onset_epoch_ms","response_iso","response_epoch_ms",
+      "reaction_time_ms","session_elapsed_ms"
+    ];
+
+    const rows = state.trials.map(t => [
+      state.subjectId, state.sessionStartISO, state.sessionStartMs,
+      t.trial_index, t.question_type, csvEscape(t.question_text), csvEscape(t.options),
+      csvEscape(t.correct_answer), csvEscape(t.selected_answer), t.is_correct,
+      t.onset_iso, t.onset_epoch_ms, t.response_iso, t.response_epoch_ms,
+      t.reaction_time_ms, t.session_elapsed_ms
+    ]);
+
+    const csvContent = "\uFEFF" + [headers.join(","), ...rows.map(r => r.join(","))].join("\r\n");
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    const ts = state.sessionStartISO.replace(/[:.]/g, "-");
+    a.href = url;
+    a.download = `distraction_task_${state.subjectId}_${ts}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  });
+
+  function csvEscape(str){
+    const s = String(str);
+    if(/[",\r\n]/.test(s)){
+      return '"' + s.replace(/"/g, '""') + '"';
+    }
+    return s;
+  }
+
+  /* ---------------- 重新開始 ---------------- */
+  $("btn-restart").addEventListener("click", () => {
+    state.trials = [];
+    state.ended = false;
+    state.paused = false;
+    $("input-subject").value = "";
+    $("stat-elapsed").textContent = "03:00";
+    $("stat-elapsed").classList.remove("low-time");
+    showScreen("setup");
+  });
+
+})();
+</script>
+</body>
+</html>
